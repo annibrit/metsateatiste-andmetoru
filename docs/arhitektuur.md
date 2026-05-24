@@ -1,63 +1,79 @@
 # Arhitektuur
 
-> **Juhend:** See fail on projektitöö esimese nädala väljund. Asenda kõik nurksulgudes plankid oma projekti tegeliku sisuga. Kustuta see juhendrida.
-
 ## Äriküsimus
 
-[Kirjuta ühe-kahe lausega oma äriküsimus täpselt. Näiteks: "Millistes kauplustes ja mis kellaaegadel on müügitõhusus (käive külastaja kohta) kõrgeim?"]
+Kuidas on metsaraie Eestis aastate jooksul muutunud — kus, kui palju ja mis tüüpi raie kasvab või kahaneb?
 
 ## Mõõdikud
 
-1. [Esimene mõõdik — kirjelda, mida arvutate ja kuidas]
-2. [Teine mõõdik]
-3. [Kolmas mõõdik — vabatahtlik]
+Kõik mõõdikud on kohaliku omavalitsuse (KOV) kaupa.
+
+1. **Raieala (ha) ja raiemaht (tm)** — kehtivate metsateatiste pindala ja raiemahu summa.
+2. **Raieliikide jaotus (%)** — iga raieliigi (lageraie, harvendusraie, sanitaarraie jne) osakaal KOV-i kogu raiealast.
+3. **Raieala muutus (%) võrreldes eelmise aastaga** — jooksva ja eelmise aasta raieala vahe protsentides, kasutades nii kehtivaid kui arhiveeritud teatiseid.
 
 ## Andmeallikad
 
 | Allikas | Tüüp | Ajas muutuv? | Roll |
 |---------|------|--------------|------|
-| [Nimi] | [API / CSV / DB] | Jah, [iga X tundi / päeva] | [Milleks kasutatakse?] |
-| [Nimi] | [seed / dim-tabel] | Ei, staatiline | [Milleks kasutatakse?] |
+| Metsaregistri WFS — kehtivad teatised (`metsaregister:teatis`) | API (WFS) | Jah, uueneb tööpäeviti | Põhiandmed: raieala, raiemaht, raieliik, geomeetria. ~144 000 kirjet. |
+| Metsaregistri WFS — teatiste arhiiv (`metsaregister:teatis_arhiiv`) | API (WFS) | Jah, lisandub igapäevaselt | Ajaloolised andmed alates 2016. ~845 000 kirjet. Vajalik aastase muutuse arvutamiseks. |
+| Maa-ameti KOV piirid (`ms:omavalitsus_pind`) | API (WFS) | Ei, uueneb harva | 78 KOV-i piiripolügooni kaardi ja ruumilise ristamise jaoks. |
+| `raieliik_koodid.csv` | seed / dim-tabel | Ei, staatiline | Raieliigi koodi ja nime vastendus. |
 
 ## Andmevoog
 
 ```mermaid
 flowchart LR
-    source[Andmeallikas] --> ingest[Sissevõtt]
-    ingest --> staging[(staging)]
-    staging --> transform[Transformatsioon]
-    transform --> mart[(mart)]
-    mart --> dashboard[Näidikulaud]
-    mart --> quality[Andmekvaliteedi testid]
-    scheduler[Scheduler] --> ingest
+    seed[raieliik_koodid.csv] --> dim[(mart.dim_raieliik)]
+    WFS_A[Metsaregister WFS\nkehtivad teatised] --> ingest[Python ingest]
+    WFS_B[Metsaregister WFS\nteatiste arhiiv] --> ingest
+    MAA[Maa-ameti WFS\nKOV piirid] --> ingest
+    ingest --> raw_t[(staging.raw_metsateatis)]
+    ingest --> raw_a[(staging.raw_metsateatis_arhiiv)]
+    ingest --> raw_k[(staging.raw_kov_piirid)]
+    raw_t --> transform[dbt transformatsioon]
+    raw_a --> transform
+    raw_k --> transform
+    dim --> transform
+    transform --> kov[(mart.mart_raie_kov)]
+    transform --> ajaline[(mart.mart_raie_ajaline)]
+    kov --> dashboard[Dashboard]
+    ajaline --> dashboard
+    transform --> quality[Andmekvaliteedi testid]
+    AF[Airflow DAG] -.-> ingest
+    AF -.-> transform
 ```
-
-> Täpsusta diagrammi vastavalt oma projektile — lisa rohkem andmeallikaid, mudeleid või teenuseid.
 
 ## Andmebaasi kihid
 
 | Kiht | Roll |
 |------|------|
-| `staging` | Hoiab allika andmeid töötlemata kujul. |
-| `mart` | Hoiab transformeeritud ja ärilogikat sisaldavaid tabeleid. |
+| `staging` | Hoiab allikatest saadud andmeid töötlemata kujul: metsateatised, arhiiv, KOV piirid. |
+| `mart` | Hoiab puhastatud ja transformeeritud tabeleid: mõõdikud KOV-i kaupa, ajaline trend, raieliigi dimensioon. |
+| `quality` | Hoiab andmekvaliteedi testide tulemusi. |
 
 ## Tööjaotus
 
 | Roll | Vastutus | Täitja |
 |------|----------|--------|
-| Andmeallika omanik | Kirjutab sissevõtu loogika, hoiab API-t töös | [Nimi] |
-| Transformatsioonide omanik | Kirjutab mart kihi mudelid ja mõõdikute arvutuse | [Nimi] |
-| Kvaliteedi omanik | Kirjutab testid ja vaatab läbi ebaõnnestunud kontrollid | [Nimi] |
-| Näidikulaua omanik | Ehitab näidikulaua ja seob selle äriküsimusega | [Nimi] |
+| Andmeallika omanik | Kirjutab sissevõtu loogika, hoiab Airflow DAG-i töökorras, disainib staging kihi | Anni-Brit |
+| Transformatsioonide omanik | Kirjutab dbt staging ja mart mudelid, arvutab mõõdikud | Kati |
+| Kvaliteedi omanik | Kirjutab dbt testid ja vaatab läbi ebaõnnestunud kontrollid | Tiina |
+| Näidikulaua omanik | Ehitab näidikulaua ja seob selle äriküsimusega | Maris |
 
 ## Riskid
 
 | Risk | Mõju | Maandus |
 |------|------|---------|
-| [Risk 1 — näiteks: API ei vasta] | [Mis juhtub?] | [Kuidas maandad?] |
-| [Risk 2] | [Mis juhtub?] | [Kuidas maandad?] |
-| [Risk 3] | [Mis juhtub?] | [Kuidas maandad?] |
+| Arhiivi backfill (~845k kirjet) ebaõnnestub — WFS timeout või katkestus | Ajaline trend (mõõdik #3) jääb puudu | Tõmbame batchitena kuu kaupa, logime progressi, katkestuse korral jätkame sealt, kus pooleli jäi. |
+| Metsateatise raieala ulatub mitme KOV-i territooriumile | Raieala läheb topelt kirja | Uurime selliste kirjete hulka. Vajadusel jagame raieala KOV-ide vahel kattumise pindala järgi. |
+| Interaktiivse kaardirakenduse tegemine osutub keeruliseks | Dashboard jääb poolikuks | Alustame lihtsamast versioonist, konsulteerime juhendajatega. |
+| WFS API väljade nimed või struktuur muutuvad | Sissevõtt katkeb | Automaattestid ja valideerimisloogika kontrollivad oodatud väljade olemasolu enne laadimist. |
 
 ## Privaatsus ja turve
 
-[Kirjelda, millised isiku- või tundlikud andmed teie projektis esinevad (kui üldse) ja kuidas neid kaitsete. Isikuandmed peavad olema anonümiseeritud. Andmebaasi paroolid peavad tulema `.env` failist.]
+Kõik kasutatud andmed on avalikud.
+
+Andmebaasi paroolid ja konfiguratsioon tulevad `.env` failist, mis on `.gitignore`-s. Repos on `.env.example` malliga, mis ainult näitab vajalikke muutujaid. WFS API-d ei nõua autentimist.
+
