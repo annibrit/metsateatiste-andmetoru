@@ -2,7 +2,7 @@
 
 ## Äriküsimus
 
-Kuidas on metsaraie Eestis aastate jooksul muutunud — kus, kui palju ja mis tüüpi raie kasvab või kahaneb?
+Kuidas on metsaraie (metsateatiste alusel) Eestis aastate jooksul muutunud — kus, kui palju ja mis tüüpi raie kasvab või kahaneb?
 
 ## Mõõdikud
 
@@ -70,6 +70,7 @@ flowchart LR
 | Metsateatise raieala ulatub mitme KOV-i territooriumile | Raieala läheb topelt kirja | Uurime selliste kirjete hulka. Vajadusel jagame raieala KOV-ide vahel kattumise pindala järgi. |
 | Interaktiivse kaardirakenduse tegemine osutub keeruliseks | Dashboard jääb poolikuks | Alustame lihtsamast versioonist, konsulteerime juhendajatega. |
 | WFS API väljade nimed või struktuur muutuvad | Sissevõtt katkeb | Automaattestid ja valideerimisloogika kontrollivad oodatud väljade olemasolu enne laadimist. |
+| KOV piirid muutuvad ajas | Ajaloolised andmed ei ole otseselt võrreldavad praeguste KOV-idega| Kasutame alati kehtivaid KOV piire ja teeme spatial join'i teatise geomeetria alusel, mitte KOV koodi järgi. Varasemad andmed koonduvad automaatselt praeguse KOV-i alla. |
 
 ## Privaatsus ja turve
 
