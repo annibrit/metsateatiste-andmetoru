@@ -18,7 +18,7 @@ services:
       interval: 10s
       retries: 5
       start_period: 5s
-
+ 
   pipeline:
     build:
       context: .
@@ -41,7 +41,7 @@ services:
       - ./scripts:/app/scripts
     working_dir: /app
     tty: true
-
+ 
   scheduler:
     build:
       context: .
@@ -66,7 +66,7 @@ services:
       - ./scripts:/app/scripts
     working_dir: /app
     command: ["bash", "scripts/start_cron.sh"]
-
+ 
   dashboard:
     build:
       context: .
@@ -97,7 +97,60 @@ services:
       ]
     ports:
       - "${DASHBOARD_PORT_HOST:-8501}:8501"
-
+ 
+  superset-db:
+    image: postgres:16
+    container_name: metsateatis-superset-db
+    environment:
+      POSTGRES_USER: ${SUPERSET_DB_USER}
+      POSTGRES_PASSWORD: ${SUPERSET_DB_PASSWORD}
+      POSTGRES_DB: ${SUPERSET_DB_NAME}
+    volumes:
+      - superset-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SUPERSET_DB_USER} -d ${SUPERSET_DB_NAME}"]
+      interval: 5s
+      retries: 10
+    restart: always
+ 
+  superset-init:
+    image: apache/superset:latest
+    container_name: metsateatis-superset-init
+    depends_on:
+      superset-db:
+        condition: service_healthy
+    volumes:
+      - superset-home:/app/superset_home
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://${SUPERSET_DB_USER}:${SUPERSET_DB_PASSWORD}@superset-db:5432/${SUPERSET_DB_NAME}"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        superset db upgrade &&
+        superset fab create-admin --username ${SUPERSET_ADMIN_USER} --firstname Admin --lastname User --email ${SUPERSET_ADMIN_EMAIL} --password ${SUPERSET_ADMIN_PASSWORD} &&
+        superset init
+    restart: "no"
+ 
+  superset:
+    image: apache/superset:latest
+    container_name: metsateatis-superset
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    ports:
+      - "${SUPERSET_PORT_HOST:-8088}:8088"
+    volumes:
+      - superset-home:/app/superset_home
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://${SUPERSET_DB_USER}:${SUPERSET_DB_PASSWORD}@superset-db:5432/${SUPERSET_DB_NAME}"
+    command: ["/app/docker/docker-entrypoint.sh"]
+    restart: always
+ 
 volumes:
   metsateatis_pgdata:
     name: metsateatis-pgdata
+  superset-db-volume:
+  superset-home:

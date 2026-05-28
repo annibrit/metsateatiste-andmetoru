@@ -6,7 +6,10 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY scripts/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+COPY scripts/requirements.txt /tmp/scripts-requirements.txt
+COPY dashboard/requirements.txt /tmp/dashboard-requirements.txt
+
+RUN pip install --no-cache-dir -r /tmp/scripts-requirements.txt \
+    && pip install --no-cache-dir -r /tmp/dashboard-requirements.txt
 
 CMD ["sleep", "infinity"]
