@@ -1,6 +1,6 @@
 -- Metsateatiste transformatsioonikiht.
 -- Parandab vigased KOV-ide piirid 
--- Loob vaate staging.v_metsateatis_kov (kus KOV nimi tuleb juurde spatial joiniga)
+-- Loob tabeli staging.v_metsateatis_kov (kus KOV-i nimi tuleb juurde spatial joiniga)
 -- ja mart tabelid mõõdikutega.
 
 DROP TABLE IF EXISTS staging.kov_piirid_parandatud;
