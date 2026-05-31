@@ -9,7 +9,7 @@ SELECT * FROM staging.raw_kov_piirid;
 UPDATE staging.kov_piirid_parandatud SET geom = ST_MakeValid(geom) WHERE NOT ST_IsValid(geom);
 CREATE INDEX ON staging.kov_piirid_parandatud USING gist(geom);
 
-
+DROP VIEW IF EXISTS staging.v_metsateatis_kov;
 DROP TABLE IF EXISTS staging.v_metsateatis_kov;
 
 CREATE TABLE staging.v_metsateatis_kov AS
