@@ -60,8 +60,27 @@ docker compose up -d --build
 # docker compose exec pipeline python scripts/run_pipeline.py run-all
 ```
 
-Airflow (kui kasutatakse): http://localhost:8080 (kasutaja: airflow / parool: airflow)
-Näidikulaud: http://localhost:[PORT]
+Streamlit näidikulaud: http://localhost:8501
+
+### Apache Superset
+
+Superset käivitatakse eraldi, kuna selle ehitamine võtab kauem aega.
+
+```bash
+docker compose up superset -d --build
+```
+
+Superset avaneb aadressil http://localhost:8088. Sisselogimise andmed on `.env` failis (`SUPERSET_ADMIN_USER` ja `SUPERSET_ADMIN_PASSWORD`).
+
+**Näidikulaua importimine brauserist:**
+
+1. Logi Supersetti sisse
+2. Ava menüüst **Settings → Import Dashboards**
+3. Lae üles fail `dashboard_export_yyyy.zip`
+4. Impordi käigus küsib Superset andmebaasi parooli — sisesta `.env` failis olev `POSTGRES_PASSWORD` väärtus
+5. Kinnita import
+
+> **Märkus:** Kui import annab veateate tundmatute väljade kohta (`datetime_format`, `configuration_method`), tähendab see Superseti versioonide ühildumatust. Uuenda sellisel juhul `Dockerfile.superset`-is versiooni vastavalt eksporditud failile.
 
 ## Saladused ja konfiguratsioon
 
