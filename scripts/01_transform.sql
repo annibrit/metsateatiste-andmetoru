@@ -1,15 +1,7 @@
 -- Metsateatiste transformatsioonikiht.
--- Parandab vigased KOV-ide piirid 
--- Loob vaate staging.v_metsateatis_kov (kus KOV nimi tuleb juurde spatial joiniga)
--- ja mart tabelid mõõdikutega.
+-- Loob staging.v_metsateatis_kov ja staging.v_metsateatis_kov_arhiiv
+-- katastritunnuse kaudu KOV nime lisamisega ning mart tabelid mõõdikutega.
 
-DROP TABLE IF EXISTS staging.kov_piirid_parandatud;
-CREATE TABLE staging.kov_piirid_parandatud AS
-SELECT * FROM staging.raw_kov_piirid;
-UPDATE staging.kov_piirid_parandatud SET geom = ST_MakeValid(geom) WHERE NOT ST_IsValid(geom);
-CREATE INDEX ON staging.kov_piirid_parandatud USING gist(geom);
-
-DROP VIEW IF EXISTS staging.v_metsateatis_kov;
 DROP TABLE IF EXISTS staging.v_metsateatis_kov;
 
 CREATE TABLE staging.v_metsateatis_kov AS
@@ -28,15 +20,47 @@ SELECT
     m.kehtiv_kuni,
     EXTRACT(YEAR FROM m.otsus_kinnitatud_kp)::int AS aasta,
     TRUE                                        AS aktiivne,
-    k.onimi                                     AS kov_nimi,
-    k.mnimi                                     AS maakond,
+    k.ov_nimi                                  AS kov_nimi,
+    k.mk_nimi                                  AS maakond,
     m.geom
 FROM staging.raw_metsateatis AS m
-LEFT JOIN staging.kov_piirid_parandatud AS k
-    ON ST_Intersects(ST_PointOnSurface(m.geom), k.geom)
+LEFT JOIN staging.raw_kataster AS k
+    ON m.katastri_nr = k.tunnus
 LEFT JOIN staging.dim_raieliik AS d
     ON m.too_kood = d.too_kood;
 
+
+-- ============================================================
+-- staging.v_metsateatis_kov_arhiiv
+-- Arhiivitud teatised koos KOV nimega (katastritunnuse kaudu).
+-- Ruumilise joini asemel kasutatakse katastri viidetabelit,
+-- sest 845k kirje peale oleks spatial join liiga aeglane.
+-- ============================================================
+
+DROP TABLE IF EXISTS staging.v_metsateatis_kov_arhiiv;
+
+CREATE TABLE staging.v_metsateatis_kov_arhiiv AS
+SELECT
+    m.sys_id,
+    m.teatise_nr,
+    m.kinnistu_nimetus,
+    m.metskond,
+    m.katastri_nr,
+    m.pindala,
+    m.too_kood,
+    COALESCE(d.raieliik, m.too_kood)           AS raieliik,
+    m.raiutav_maht,
+    m.otsus,
+    m.otsus_kinnitatud_kp,
+    m.arhiveerimise_aeg,
+    EXTRACT(YEAR FROM m.otsus_kinnitatud_kp)::int AS aasta,
+    k.ov_nimi                                  AS kov_nimi,
+    k.mk_nimi                                  AS maakond
+FROM staging.raw_metsateatis_arhiiv AS m
+LEFT JOIN staging.raw_kataster AS k
+    ON m.katastri_nr = k.tunnus
+LEFT JOIN staging.dim_raieliik AS d
+    ON m.too_kood = d.too_kood;
 
 -- ============================================================
 -- mart.mart_raie_kov

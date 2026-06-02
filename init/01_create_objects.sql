@@ -118,3 +118,13 @@ CREATE INDEX IF NOT EXISTS idx_raw_kov_piirid_geom
 -- Abistab arhiivi backfilli jätkamist ja igapäevaseid lisandusi
 CREATE INDEX IF NOT EXISTS idx_raw_metsateatis_arhiiv_aeg
     ON staging.raw_metsateatis_arhiiv (arhiveerimise_aeg);
+
+-- Katastritüksuste KOV-viidete tabel (Maa-ameti WFS: kataster:KU_piirid).
+-- Ainult tunnus + haldusüksused, ilma geomeetriata.
+-- Kasutatakse KOV-i nime lisamiseks arhiivi metsateatistele katastritunnuse kaudu.
+CREATE TABLE IF NOT EXISTS staging.raw_kataster (
+    tunnus       text           PRIMARY KEY,
+    ov_nimi      text,
+    mk_nimi      text,
+    _loaded_at   timestamptz    NOT NULL DEFAULT now()
+);
