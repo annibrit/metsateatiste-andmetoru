@@ -133,10 +133,13 @@ services:
       ADMIN_USERNAME: ${SUPERSET_ADMIN_USER}
       ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
       ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     command:
       - /bin/sh
       - -c
-      - "superset db upgrade && (superset fab create-admin --username $${ADMIN_USERNAME} --firstname Admin --lastname User --email $${ADMIN_EMAIL} --password $${ADMIN_PASSWORD} || true) && superset init"
+      - "superset db upgrade && (superset fab create-admin --username $${ADMIN_USERNAME} --firstname Admin --lastname User --email $${ADMIN_EMAIL} --password $${ADMIN_PASSWORD} || true) && superset init && superset set-database-uri -d 'Mets' -u \"postgresql+psycopg2://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@db:5432/$${POSTGRES_DB}\""
     restart: "no"
 
   superset:
