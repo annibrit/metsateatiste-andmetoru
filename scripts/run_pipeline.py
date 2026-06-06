@@ -62,6 +62,7 @@ def fetch_wfs_page(
     start_index: int = 0,
     count: int = WFS_PAGE_SIZE,
     cql_filter: str | None = None,
+    property_names: list[str] | None = None,
 ) -> dict:
     """Pärib ühe lehekülje WFS feature'eid GeoJSON-ina."""
     params = {
@@ -75,6 +76,8 @@ def fetch_wfs_page(
     }
     if cql_filter:
         params["CQL_FILTER"] = cql_filter
+    if property_names:
+        params["propertyName"] = ",".join(property_names)
 
     try:
         resp = requests.get(base_url, params=params, timeout=120)
@@ -94,6 +97,7 @@ def fetch_all_wfs(
     base_url: str,
     type_name: str,
     cql_filter: str | None = None,
+    property_names: list[str] | None = None,
 ) -> list[dict]:
     """Pärib kõik feature'id lehekülgede kaupa. Tagastab feature'ide listi."""
     all_features = []
@@ -101,7 +105,8 @@ def fetch_all_wfs(
 
     while True:
         data = fetch_wfs_page(
-            base_url, type_name, start_index=start_index, cql_filter=cql_filter,
+            base_url, type_name, start_index=start_index,
+            cql_filter=cql_filter, property_names=property_names,
         )
         features = data.get("features", [])
         all_features.extend(features)
@@ -334,6 +339,60 @@ def ingest_kov() -> None:
 
 
 # ============================================================
+# Katastritüksused — KOV-viidete tabel arhiivi joiniks
+# ============================================================
+
+# Kihi nimi (typeName) GetCapabilities vastusest: <Name>kataster:ky_kehtiv</Name> (<Title>KÜ piirid</Title>)
+KATASTER_WFS_URL = "https://gsavalik.envir.ee/geoserver/kataster/wfs"
+KATASTER_LAYER = "kataster:ky_kehtiv"
+KATASTER_FIELDS = ["tunnus", "ov_nimi", "mk_nimi"]
+
+
+def load_kataster(conn, features: list[dict]) -> int:
+    """Laadib katastritüksuste KOV-viited staging.raw_kataster tabelisse.
+    Kustutab enne vanad read — täislaadimine iga kord."""
+    now = datetime.now(timezone.utc)
+
+    with conn.cursor() as cur:
+        cur.execute("TRUNCATE TABLE staging.raw_kataster")
+        rows = [
+            (
+                f["properties"].get("tunnus"),
+                f["properties"].get("ov_nimi"),
+                f["properties"].get("mk_nimi"),
+                now,
+            )
+            for f in features
+            if f["properties"].get("tunnus") is not None
+        ]
+        cur.executemany(
+            "INSERT INTO staging.raw_kataster (tunnus, ov_nimi, mk_nimi, _loaded_at) VALUES (%s, %s, %s, %s)",
+            rows,
+        )
+
+    conn.commit()
+    return len(rows)
+
+
+def ingest_kataster() -> None:
+    """Katastritüksuste KOV-viidete laadimine Maa-ameti WFS-ist.
+    Laadib ainult tunnus + ov_nimi + mk_nimi, ilma geomeetriata."""
+    conn = get_connection()
+    try:
+        log("Pärin katastritüksuseid Maa-ameti WFS-ist...")
+        features = fetch_all_wfs(
+            KATASTER_WFS_URL,
+            KATASTER_LAYER,
+            property_names=KATASTER_FIELDS,
+        )
+        log(f"Saadud {len(features)} katastritüksust, laadin andmebaasi...")
+        loaded = load_kataster(conn, features)
+        log(f"Kataster valmis. {loaded} kirjet laaditud.")
+    finally:
+        conn.close()
+
+
+# ============================================================
 # Arhiveeritud teatised — backfill + inkrementaalne
 # ============================================================
 
@@ -528,12 +587,16 @@ def check_results() -> None:
             cur.execute("SELECT COUNT(*) FROM staging.raw_kov_piirid")
             kov = cur.fetchone()[0]
 
+            cur.execute("SELECT COUNT(*) FROM staging.raw_kataster")
+            kataster = cur.fetchone()[0]
+
         print()
         print("Staging tabelite seis")
         print("---------------------")
         print(f"  raw_metsateatis:         {kehtivad:>10,} kirjet")
         print(f"  raw_metsateatis_arhiiv:  {arhiiv:>10,} kirjet")
         print(f"  raw_kov_piirid:          {kov:>10,} kirjet")
+        print(f"  raw_kataster:            {kataster:>10,} kirjet")
 
         # Transformeeritud tabelite seis. Kasutame to_regclass, et tabeli
         # puudumine (kui transform pole veel käivitatud) ei katkestaks päringut.
@@ -575,7 +638,7 @@ def check_results() -> None:
         print("-------------------")
         if not rows:
             print("  (tühi)")
-        for run_id, started, source, status, rows_loaded, message in rows:
+        for _, started, source, status, rows_loaded, _ in rows:
             print(f"  {started}  {source:<35s}  {status:<8s}  {rows_loaded or 0} rida")
 
     finally:
@@ -596,6 +659,7 @@ def reset_data() -> None:
                     staging.raw_metsateatis,
                     staging.raw_metsateatis_arhiiv,
                     staging.raw_kov_piirid,
+                    staging.raw_kataster,
                     staging.pipeline_runs,
                     quality.test_results
                 CASCADE
@@ -612,11 +676,12 @@ def reset_data() -> None:
 # ============================================================
 
 def run_all() -> None:
-    """Käivitab igapäevase töövoo: kehtivad teatised + KOV piirid.
+    """Käivitab igapäevase töövoo: kehtivad teatised + KOV piirid + kataster.
     Arhiivi backfill käivitatakse eraldi käsuga (ingest-arhiiv),
     sest see võtab pikalt aega."""
     ingest()
     ingest_kov()
+    ingest_kataster()
     if TRANSFORM_SQL.exists():
         transform()
     if QUALITY_SQL.exists():
@@ -632,7 +697,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Metsateatiste andmetöövoog.")
     parser.add_argument(
         "command",
-        choices=["ingest", "ingest-kov", "ingest-arhiiv", "transform", "test", "check", "reset", "run-all"],
+        choices=["ingest", "ingest-kov", "ingest-kataster", "ingest-arhiiv", "transform", "test", "check", "reset", "run-all"],
         help="Töövoo samm, mida käivitada.",
     )
     return parser.parse_args()
@@ -645,6 +710,8 @@ def main() -> int:
             ingest()
         elif args.command == "ingest-kov":
             ingest_kov()
+        elif args.command == "ingest-kataster":
+            ingest_kataster()
         elif args.command == "ingest-arhiiv":
             ingest_arhiiv()
         elif args.command == "transform":

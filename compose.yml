@@ -101,6 +101,8 @@ services:
   superset-db:
     image: postgres:16
     container_name: metsateatis-superset-db
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${SUPERSET_DB_USER}
       POSTGRES_PASSWORD: ${SUPERSET_DB_PASSWORD}
@@ -114,38 +116,50 @@ services:
     restart: always
  
   superset-init:
-    image: apache/superset:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.superset
     container_name: metsateatis-superset-init
     depends_on:
       superset-db:
         condition: service_healthy
     volumes:
+      - ./superset/superset_config.py:/app/superset_config.py
       - superset-home:/app/superset_home
     environment:
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-      SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://${SUPERSET_DB_USER}:${SUPERSET_DB_PASSWORD}@superset-db:5432/${SUPERSET_DB_NAME}"
+      SUPERSET_CONFIG_PATH: /app/superset_config.py
+      DATABASE_URI: "postgresql+psycopg2://${SUPERSET_DB_USER}:${SUPERSET_DB_PASSWORD}@superset-db:5432/${SUPERSET_DB_NAME}"
+      SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      ADMIN_USERNAME: ${SUPERSET_ADMIN_USER}
+      ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     command:
       - /bin/sh
       - -c
-      - |
-        superset db upgrade &&
-        superset fab create-admin --username ${SUPERSET_ADMIN_USER} --firstname Admin --lastname User --email ${SUPERSET_ADMIN_EMAIL} --password ${SUPERSET_ADMIN_PASSWORD} &&
-        superset init
+      - "superset db upgrade && (superset fab create-admin --username $${ADMIN_USERNAME} --firstname Admin --lastname User --email $${ADMIN_EMAIL} --password $${ADMIN_PASSWORD} || true) && superset init && superset set-database-uri -d 'Mets' -u \"postgresql+psycopg2://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@db:5432/$${POSTGRES_DB}\""
     restart: "no"
- 
- superset:
-    image: apache/superset:latest
+
+  superset:
+    build:
+      context: .
+      dockerfile: Dockerfile.superset
     container_name: metsateatis-superset
-    environment:
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-      SQLALCHEMY_DATABASE_URI: "postgresql+psycopg2://${SUPERSET_DB_USER}:${SUPERSET_DB_PASSWORD}@superset-db:5432/${SUPERSET_DB_NAME}"
-    ports:
-      - "${SUPERSET_PORT_HOST:-8088}:8088"
     depends_on:
       superset-init:
         condition: service_completed_successfully
-    command: >
-      bash -c "pip install psycopg2-binary && gunicorn --bind 0.0.0.0:8088 --workers 2 --timeout 120 'superset.app:create_app()'"
+    ports:
+      - "${SUPERSET_PORT_HOST:-8088}:8088"
+    volumes:
+      - ./superset/superset_config.py:/app/superset_config.py
+      - superset-home:/app/superset_home
+    environment:
+      SUPERSET_CONFIG_PATH: /app/superset_config.py
+      DATABASE_URI: "postgresql+psycopg2://${SUPERSET_DB_USER}:${SUPERSET_DB_PASSWORD}@superset-db:5432/${SUPERSET_DB_NAME}"
+      SECRET_KEY: ${SUPERSET_SECRET_KEY}
+    command: ["/app/docker/entrypoints/run-server.sh"]
     restart: always
  
 volumes:
