@@ -598,6 +598,30 @@ def check_results() -> None:
         print(f"  raw_kov_piirid:          {kov:>10,} kirjet")
         print(f"  raw_kataster:            {kataster:>10,} kirjet")
 
+        # Transformeeritud tabelite seis. Kasutame to_regclass, et tabeli
+        # puudumine (kui transform pole veel käivitatud) ei katkestaks päringut.
+        def safe_count(qualified_name: str) -> int | None:
+            with conn.cursor() as c:
+                c.execute("SELECT to_regclass(%s)", (qualified_name,))
+                if c.fetchone()[0] is None:
+                    return None
+                c.execute(f"SELECT COUNT(*) FROM {qualified_name}")
+                return c.fetchone()[0]
+
+        def fmt(value: int | None) -> str:
+            return f"{value:>10,} rida" if value is not None else "    pole veel loodud"
+
+        v_kov = safe_count("staging.v_metsateatis_kov")
+        mart_kov = safe_count("mart.mart_raie_kov")
+
+        print()
+        print("Transformeeritud tabelite seis")
+        print("------------------------------")
+        print(f"  v_metsateatis_kov:       {fmt(v_kov)}")
+        print(f"  mart_raie_kov:           {fmt(mart_kov)}")
+        if mart_kov in (None, 0):
+            print("  NB: mart on tühi — kontrolli, kas transform käivitus (run_pipeline.py transform).")
+
         with conn.cursor() as cur:
             cur.execute(
                 """
