@@ -4,13 +4,66 @@
 
 -- KOV piirid parandatakse ainult siis, kui tabelit pole veel loodud või on tühi.
 -- KOV-id muutuvad harva, seega ei pea seda iga transformatsiooniga uuesti tegema.
-DO $$
+/* DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.tables
         WHERE table_schema = 'staging'
           AND table_name   = 'kov_piirid_parandatud'
     ) OR (SELECT COUNT(*) FROM staging.kov_piirid_parandatud) = 0 THEN
+        DROP TABLE IF EXISTS staging.kov_piirid_parandatud;
+        CREATE TABLE staging.kov_piirid_parandatud AS
+        SELECT * FROM staging.raw_kov_piirid;
+        UPDATE staging.kov_piirid_parandatud
+           SET geom = ST_MakeValid(geom)
+         WHERE NOT ST_IsValid(geom);
+        CREATE INDEX ON staging.kov_piirid_parandatud USING gist(geom);
+        RAISE NOTICE 'kov_piirid_parandatud loodud.';
+    ELSE
+        RAISE NOTICE 'kov_piirid_parandatud on juba olemas, ei vaheta.';
+    END IF;
+END $$; */
+
+-- ============================================================
+-- PARANDATUD VERSIOON (vana versioon ülal välja kommenteerituna)
+-- ============================================================
+-- Probleem vanas versioonis:
+--   Vana IF-tingimus oli kujul:
+--       NOT EXISTS (... information_schema ...) OR (SELECT COUNT(*) FROM staging.kov_piirid_parandatud) = 0
+--   See lootis, et OR "lühistab" (short-circuit) ja teist poolt ei käivitata,
+--   kui tabelit pole. Aga PostgreSQL lahendab KÕIK tabeliviited juba
+--   PLANEERIMISE ajal (enne käivitamist), OR aga lühistab alles KÄIVITAMISE
+--   ajal. Seega kui staging.kov_piirid_parandatud't pole olemas (nt pärast
+--   puhast andmebaasi taasloomist), siis planeerija viskab vea
+--   "relation does not exist" ENNE kui OR jõuab teist poolt vahele jätta.
+--   Vanal masinal töötas see ainult sellepärast, et tabel oli eelmisest
+--   käivitusest juba olemas — puhtal andmebaasil see katki läheb.
+--
+-- Parandus:
+--   1) to_regclass('staging.kov_piirid_parandatud') tagastab NULL, kui tabelit
+--      pole — ei viska viga (erinevalt otsesest tabeliviitest).
+--   2) COUNT(*) on nüüd ELSE-harus, mida käivitatakse AINULT siis, kui tabel
+--      on olemas. PL/pgSQL planeerib laused laisalt (alles siis, kui kontroll
+--      neisse jõuab), seega tühja tabeli viidet ei planeerita kunagi puuduva
+--      tabeli korral.
+--
+-- Loogika ise on sama: kui tabelit pole VÕI see on tühi, ehita uuesti;
+-- muidu jäta vahele (KOV piirid muutuvad harva).
+-- ============================================================
+
+DO $$
+DECLARE
+    needs_rebuild boolean;
+BEGIN
+    -- to_regclass returns NULL if the table doesn't exist — no error, no plan-time failure.
+    IF to_regclass('staging.kov_piirid_parandatud') IS NULL THEN
+        needs_rebuild := true;
+    ELSE
+        -- This branch only runs when the table exists, so the reference is safe to plan.
+        SELECT COUNT(*) = 0 INTO needs_rebuild FROM staging.kov_piirid_parandatud;
+    END IF;
+
+    IF needs_rebuild THEN
         DROP TABLE IF EXISTS staging.kov_piirid_parandatud;
         CREATE TABLE staging.kov_piirid_parandatud AS
         SELECT * FROM staging.raw_kov_piirid;
