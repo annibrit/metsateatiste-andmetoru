@@ -39,6 +39,7 @@ services:
         condition: service_healthy
     volumes:
       - ./scripts:/app/scripts
+      - ./logs:/var/log/metsateatis
     working_dir: /app
     tty: true
  
@@ -64,6 +65,7 @@ services:
         condition: service_healthy
     volumes:
       - ./scripts:/app/scripts
+      - ./logs:/var/log/metsateatis
     working_dir: /app
     command: ["bash", "scripts/start_cron.sh"]
  
