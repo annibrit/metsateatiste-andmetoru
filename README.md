@@ -230,14 +230,27 @@ docker compose exec pipeline python scripts/run_pipeline.py test
 ## Kokkuvõte, puudused ja võimalikud edasiarendused
 
 **Kokkuvõte:**
-- [Loetle, mis on lõpule viidud, mis töötab hästi]
+- töötav andmetoru kolmest WFS-allikast: Metsaregister (kehtivad teatised + arhiiv ~845k kirjet), Maa-ameti kataster (~700k katastritüksust) ja haldusüksuste piirid
+- Staging kiht toorandmetega, transformatsioonikiht KOV-nime lisamisega katastritunnuse kaudu ning mart-tabel, mis ühendab kehtivad metsateatised ja arhiveeritud metsateatised, agregeeritud raienäitajatega
+- Kolm mõõdikut: teatiste arv, kogupindala (ha) ja kogumaht (m³) — omavalitsuse, aasta ja raieliigi lõikes
+Superset dashboard koropletkaardiga, mis visualiseerib raieaktiivsust KOV-ide kaupa koos GeoJSON piiripolügoonidega
+- 28 andmekvaliteedi testi staging-kihi korrektsuse kontrollimiseks
+- Igapäevane automatiseeritud andmevoog cron-i kaudu
 
 **Puudused:**
-- [Loetle ausalt, mis jäi tegemata - see ei mõjuta hinnet negatiivselt, vaid aitab hinnata]
 
+- Ligikaudu 7% arhiiviteatistest ei saa KOV-i nime juurde, sest nende katastritunnus on vahepeal muutunud
+- Superseti seadistus nõuab uuel kasutajal käsitsi andmebaasi ühenduse loomist; automatiseerimiskatsed jäid versioonide ühildumatuse tõttu poolikuks
+- Deck.gl koropletkaart ei rendereeri kõiki KOV-e usaldusväärselt kõigil kasutajatel
+- Registriandmete puudused: kehtivate metsateatiste andmestikus on hulk mittekehtivaid metsateatisi, mis peaksid olema liikunud arhiivi, aga ei ole - need on meie mõõdikutest välja jäetud
+  
 **Mis edasi:**
-- [Mida tahaksid edasi teha, kui aega oleks rohkem]
 
+- Lisada ajalise trendi mart-tabel aastatevahelise muutuse näitamiseks
+- Muuta mart-tabel inkrementaalseks — ajaloolisi aastaid ei ehitataks iga päev nullist üles
+- Uurida Superseti alternatiivi (nt Streamlit koos Folium-iga), mis toetab paremini ruumilisi visualisatsioone
+- Lisada katastritunnuste historiseerimine, et vähendada arhiivis KOV-nimeta jäävate teatiste arvu
+  
 ## Meeskond
 
 | Nimi | Roll |
