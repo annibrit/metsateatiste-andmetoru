@@ -55,20 +55,12 @@ cd metsateatiste-andmetoru
 # 2. Kopeeri keskkonnamuutujad ja sea paroolid
 cp .env.example .env
 
+# 3. Käivita kogu süsteem (andmebaas, pipeline, scheduler, Superset)
+docker compose up -d --build
 
-# 3. Käivita andmebaas ja pipeline
-docker compose up db pipeline -d --build
-
-# 4. Lae andmed sisse (esimesel korral)
-docker compose exec pipeline python scripts/run_pipeline.py ingest
-docker compose exec pipeline python scripts/run_pipeline.py ingest-kov
-docker compose exec pipeline python scripts/run_pipeline.py ingest-kataster
-
-# 5. Käivita transformatsioon
-docker compose exec pipeline python scripts/run_pipeline.py transform
-
-# 6. [Vabatahtlik] Lae arhiiv (845k kirjet, võtab kaua)
-docker compose exec pipeline python scripts/run_pipeline.py ingest-arhiiv
+# 4. Lae andmed ja jooksuta kogu töövoog
+#    (esimene kord laeb ka arhiivi ~840k kirjet, seega võtab aega)
+docker compose exec pipeline python scripts/run_pipeline.py run-all
 ```
 
 Superset näidikulaud: http://localhost:8088
@@ -103,28 +95,27 @@ Ehitamine võtab esimesel korral mõni minut. Superset avaneb aadressil **http:/
 
 Sisselogimise andmed on `.env` failis: `SUPERSET_ADMIN_USER` ja `SUPERSET_ADMIN_PASSWORD`.
 
-**1. samm — andmebaasi ühenduse seadistamine**
+**1. samm — Logi sisse**
 
-Seda tuleb teha üks kord pärast esmakordset käivitamist:
+**2. samm - Loo andmebaasühendus (vajalik esmakordsel käivitamisel AINULT JUHUL KUI Datasets aken ei kuva andmebaasi Mets)**
 
-1. Logi Supersetti sisse
-2. Ava **Settings → Database Connections**
-3. Klõpsa **+ Database → PostgreSQL**
-4. Sisesta SQLAlchemy URI:
+2.1. Ava **Settings → Database Connections**
+2.2 Klõpsa **+ Database → PostgreSQL**
+2.3 Sisesta SQLAlchemy URI:
    ```
    postgresql+psycopg2://metsaregister:POSTGRES_PASSWORD@db:5432/metsaregister
    ```
    Asenda `POSTGRES_PASSWORD` oma `.env` faili `POSTGRES_PASSWORD` väärtusega
-5. Klõpsa **Test Connection** — peab ilmuma roheline `Connection looks good!`
-6. Klõpsa **Connect**
+2.4 Klõpsa **Test Connection** — peab ilmuma roheline `Connection looks good!`
+2.5 Klõpsa **Connect**
 
-**2. samm — näidikulaua importimine**
+**3. samm — näidikulaua importimine**
 
 1. Ava **Settings → Import Dashboards**
 2. Lae üles fail `superset/dashboard_export_*.zip`
 3. Klõpsa **Import**
 
-**3. samm — veendu, et andmed on olemas**
+**4. samm — veendu, et andmed on olemas**
 
 Kui dashboard näitab tühja vaadet, käivita pipeline enne Superseti avamist:
 
