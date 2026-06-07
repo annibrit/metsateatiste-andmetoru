@@ -305,13 +305,13 @@ def load_kov_piirid(conn, features: list[dict]) -> int:
                 )
                 """,
                 (
-                    p.get("OKOOD"),
-                    p.get("ONIMI"),
-                    p.get("MKOOD"),
-                    p.get("MNIMI"),
-                    p.get("TYYP"),
-                    p.get("VERS_ALGUS"),
-                    p.get("ALUS"),
+                    p.get("ehak_kood"),
+                    p.get("omavalitsus"),
+                    p.get("maakond_kood"),
+                    p.get("maakond"),
+                    p.get("tyyp"),
+                    p.get("vers_algus"),
+                    p.get("seaduslik_alus"),
                     geojson,
                     now,
                 ),
@@ -329,7 +329,7 @@ def ingest_kov() -> None:
     conn = get_connection()
     try:
         log("Pärin KOV piire Maa-ameti WFS-ist...")
-        features = fetch_all_wfs(maa_url, "ms:omavalitsus_pind")
+        features = fetch_all_wfs(maa_url, "ehak:omavalitsuste_piirid")
         log(f"Saadud {len(features)} KOV-i, laadin andmebaasi...")
 
         loaded = load_kov_piirid(conn, features)

@@ -2,7 +2,7 @@
 
 ## Äriküsimus
 
-Projekt kogub ja analüüsib Eesti metsaregistri raieteatisi, et võimaldada omavalitsuste, aastate ja raieliikide lõikes metsanduslike mõõdikute jälgimist. Lahendus on kasulik metsanduspoliitika kujundajatele, uurijatele ja omavalitsustele, kes soovivad ülevaadet oma piirkonna raieaktiivsusest.
+Projekt kogub ja analüüsib Eesti metsaregistri raieteatisi, et võimaldada omavalitsuste, aastate ja raieliikide lõikes metsanduslike mõõdikute jälgimist. Projektis on liidetud nii kehtivad metsateatised ehk viimase 2 aasta teatised kui ka arhiveeritud metsateatised alates aastast 2018. Lahendus on kasulik metsanduspoliitika kujundajatele, uurijatele ja omavalitsustele, kes soovivad ülevaadet oma piirkonna raieaktiivsusest.
 
 **Mõõdikud:**
 
@@ -16,11 +16,11 @@ Projekt kogub ja analüüsib Eesti metsaregistri raieteatisi, et võimaldada oma
 flowchart LR
     metsareg[Metsaregister WFS] --> ingest[Sissevõtt]
     kataster[Maa-amet kataster WFS] --> ingest
+    kovwfs[Maa-amet haldusüksused WFS] --> ingest
     ingest --> staging[(staging)]
     staging --> transform[Transformatsioon SQL]
     transform --> mart[(mart)]
     mart --> superset[Apache Superset]
-    mart --> streamlit[Streamlit]
 ```
 
 Täpsem kirjeldus: [`docs/arhitektuur.md`](docs/arhitektuur.md)
@@ -32,7 +32,7 @@ Täpsem kirjeldus: [`docs/arhitektuur.md`](docs/arhitektuur.md)
 | Metsaregister WFS (`metsaregister:teatis`) | WFS API | Jah, igapäevane täislaadimine | Kehtivad raieteatised |
 | Metsaregister WFS (`metsaregister:teatis_arhiiv`) | WFS API | Jah, inkrementaalne laadimine | Ajaloolised raieteatised |
 | Maa-amet kataster WFS (`kataster:ky_kehtiv`) | WFS API | Harva muutuv, täislaadimine | KOV nime lisamine katastritunnuse kaudu |
-| Maa-amet haldusüksused WFS (`ms:omavalitsus_pind`) | WFS API | Harva muutuv | KOV piirid |
+| Maa-amet haldusüksused WFS (`ehak:omavalitsuste_piirid`) | WFS API | Harva muutuv | KOV piiripolügoonid kaardikihi jaoks |
 | `scripts/raieliik_koodid.csv` | Seed-fail | Staatiline | Raieliigi koodide tõlketabel |
 
 ## Stack
@@ -71,7 +71,7 @@ docker compose exec pipeline python scripts/run_pipeline.py transform
 docker compose exec pipeline python scripts/run_pipeline.py ingest-arhiiv
 ```
 
-Streamlit näidikulaud: http://localhost:8501
+Superset näidikulaud: http://localhost:8088
 
 ### Pipeline käsud
 
@@ -208,7 +208,7 @@ docker compose exec pipeline python scripts/run_pipeline.py test
 │   ├── superset_config.py       ← Superseti konfiguratsioon
 │   └── dashboard_export_*.zip   ← eksporditud dashboard
 └── dashboard/
-    └── app.py                   ← Streamlit dashboard
+    └── app.py                   ← Streamlit dashboard (ei kasutata)
 ```
 
 ## Kokkuvõte, puudused ja võimalikud edasiarendused
@@ -226,7 +226,7 @@ docker compose exec pipeline python scripts/run_pipeline.py test
 
 | Nimi | Roll |
 |------|------|
-| [Nimi 1] | [Roll] |
-| [Nimi 2] | [Roll] |
-| [Nimi 3] | [Roll] |
-| [Nimi 4] | [Roll — vabatahtlik] |
+| Anni-Brit | Andmeallika omanik — sissevõtu loogika, cron??, staging kihi disain |
+| Kati | Transformatsioonide omanik — staging ja mart mudelid, mõõdikute arvutamine |
+| Tiina | Kvaliteedi omanik — testid ja ebaõnnestunud kontrollide läbivaatus |
+| Maris | Näidikulaua omanik — dashboard ja seos äriküsimusega |
