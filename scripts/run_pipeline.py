@@ -3,6 +3,25 @@
 Skript pärib Metsaregistri WFS-ist kehtivad ja arhiveeritud metsateatised,
 Maa-ameti WFS-ist KOV piirid, ning salvestab need staging kihti.
 Transformatsioonid ja kvaliteeditestid käivitatakse eraldi SQL-failidena.
+
+Käivitamine:
+    python scripts/run_pipeline.py <käsk>
+
+Käsud:
+    ingest          Pärib kehtivad metsateatised (metsaregister:teatis) ja
+                    teeb upsert sys_id järgi staging.raw_metsateatis tabelisse.
+    ingest-kov      Laadib Maa-ameti KOV piiripolügoonid (truncate + insert,
+                    ~78 rida) staging.raw_kov_piirid tabelisse.
+    ingest-kataster Laadib katastritüksuste KOV-viited staging.raw_kataster.
+    ingest-arhiiv   Laadib arhiveeritud teatised. Tühja tabeli korral teeb
+                    täisbackfilli (~845k), muidu inkrementaalne (ainult
+                    arhiveerimise_aeg järgi uued kirjed).
+    transform       Käivitab 01_transform.sql (staging -> mart mudelid).
+    test            Käivitab 02_quality_tests.sql andmekvaliteedi testid.
+    check           Näitab pipeline_runs ja testide viimaseid tulemusi.
+    reset           Tühjendab staging/mart tabelid (ettevaatust: kustutab andmed).
+    run-all         Igapäevane töövoog: ingest + ingest-kov + ingest-kataster +
+                    ingest-arhiiv (inkrementaalne), seejärel transform ja test.
 """
 
 from __future__ import annotations
@@ -11,6 +30,7 @@ import argparse
 import json
 import os
 import sys
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,13 +49,28 @@ SEED_SQL = SCRIPT_DIR / "00_seed_dimensions.sql"
 # WFS lehekülgede suurus (API max on 5000)
 WFS_PAGE_SIZE = 5000
 
+# Korduskatsed WFS paringutele (mooduvad vead: timeout, uhenduse katkemine)
+WFS_MAX_RETRIES = 3        # mitu korda kokku proovida
+WFS_RETRY_BACKOFF = 5      # sekundit; kasvab iga katsega (5s, 10s, ...)
+
 
 class UserFacingError(RuntimeError):
     """Viga, mille sõnum sobib otse kasutajale näitamiseks."""
 
 
+LOG_FILE = os.environ.get("PIPELINE_LOG_FILE", "/var/log/metsateatis/pipeline.log")
+
+
 def log(message: str) -> None:
-    print(message, flush=True)
+    line = f"{datetime.now(timezone.utc).isoformat()} {message}"
+    print(line, flush=True)  # laheb docker logs vaatesse
+    try:
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        with open(LOG_FILE, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except OSError:
+        # Kui logifaili ei saa kirjutada, arme katkesta toovoogu.
+        pass
 
 
 def get_env(name: str, default: str = "") -> str:
@@ -79,13 +114,26 @@ def fetch_wfs_page(
     if property_names:
         params["propertyName"] = ",".join(property_names)
 
-    try:
-        resp = requests.get(base_url, params=params, timeout=120)
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        raise UserFacingError(
-            f"WFS päring ebaõnnestus ({type_name}, startIndex={start_index}): {exc}"
-        ) from exc
+    last_exc: Exception | None = None
+    for attempt in range(1, WFS_MAX_RETRIES + 1):
+        try:
+            resp = requests.get(base_url, params=params, timeout=120)
+            resp.raise_for_status()
+            break  # onnestus
+        except requests.RequestException as exc:
+            last_exc = exc
+            if attempt < WFS_MAX_RETRIES:
+                wait = WFS_RETRY_BACKOFF * attempt  # 5s, 10s, ...
+                log(
+                    f"  WFS päring ebaõnnestus ({type_name}, startIndex={start_index}), "
+                    f"katse {attempt}/{WFS_MAX_RETRIES}: {exc}. Proovin {wait}s pärast uuesti."
+                )
+                time.sleep(wait)
+            else:
+                raise UserFacingError(
+                    f"WFS päring ebaõnnestus pärast {WFS_MAX_RETRIES} katset "
+                    f"({type_name}, startIndex={start_index}): {exc}"
+                ) from last_exc
 
     try:
         return resp.json()
@@ -676,12 +724,21 @@ def reset_data() -> None:
 # ============================================================
 
 def run_all() -> None:
-    """Käivitab igapäevase töövoo: kehtivad teatised + KOV piirid + kataster.
-    Arhiivi backfill käivitatakse eraldi käsuga (ingest-arhiiv),
-    sest see võtab pikalt aega."""
+    """Käivitab igapäevase töövoo: kehtivad teatised + KOV piirid + kataster +
+    arhiiv, seejärel transform ja kvaliteeditestid.
+
+    Arhiiv on siin kaasas, sest ingest_arhiiv on inkrementaalne — kui arhiiv
+    on juba olemas, laadib see ainult uued kirjed (kiire). Esimesel korral
+    tühja andmebaasiga teeb see siiski täisbackfilli (~845k, aeglane), seega
+    värske andmebaasi puhul tasub esimene arhiivilaadimine teha eraldi käsuga
+    (ingest-arhiiv) ja alles siis run-all kasutada.
+
+    Arhiiv laaditakse ENNE transform-i, sest mart_raie_ajaline kasutab arhiivi.
+    """
     ingest()
     ingest_kov()
     ingest_kataster()
+    ingest_arhiiv()
     if TRANSFORM_SQL.exists():
         transform()
     if QUALITY_SQL.exists():
