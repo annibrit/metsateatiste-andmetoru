@@ -1,4 +1,4 @@
-# [GRUPI NIMI] — Metsateatiste andmetoru
+# Metsateatiste andmetoru
 
 ## Äriküsimus
 
@@ -31,8 +31,8 @@ Täpsem kirjeldus: [`docs/arhitektuur.md`](docs/arhitektuur.md)
 |---------|------|--------------|------|
 | Metsaregister WFS (`metsaregister:teatis`) | WFS API | Jah, igapäevane täislaadimine | Kehtivad raieteatised |
 | Metsaregister WFS (`metsaregister:teatis_arhiiv`) | WFS API | Jah, inkrementaalne laadimine | Ajaloolised raieteatised |
-| Maa-amet kataster WFS (`kataster:ky_kehtiv`) | WFS API | Harva muutuv, täislaadimine | KOV nime lisamine katastritunnuse kaudu |
-| Maa-amet haldusüksused WFS (`ehak:omavalitsuste_piirid`) | WFS API | Harva muutuv | KOV piiripolügoonid kaardikihi jaoks |
+| Maa- ja Ruumiamet kataster WFS (`kataster:ky_kehtiv`) | WFS API | Harva muutuv, täislaadimine | KOV nime lisamine katastritunnuse kaudu |
+| Maa- ja Ruumiamet haldusüksused WFS (`ehak:omavalitsuste_piirid`) | WFS API | Harva muutuv | KOV piiripolügoonid kaardikihi jaoks |
 | `scripts/raieliik_koodid.csv` | Seed-fail | Staatiline | Raieliigi koodide tõlketabel |
 
 ## Stack
@@ -157,8 +157,8 @@ Kõik saladused on `.env` failis. Repos on ainult `.env.example`. Päris `.env` 
 
 1. **Sissevõtt** — Python skript pärib WFS API-delt kehtivad raieteatised, KOV piirid ja katastritüksuste andmed ning laadib need `staging` kihti
 2. **Laadimine** — Toorandmed salvestatakse `staging.raw_*` tabelitesse; kehtivad teatised upsert-itakse `sys_id` järgi, kataster ja KOV piirid laaditakse täismahus üle
-3. **Transformatsioon** — SQL-skriptid loovad `staging.v_metsateatis_kov` (kehtivad teatised koos KOV nimega katastritunnuse kaudu) ja `staging.v_metsateatis_kov_arhiiv` (arhiiv sama loogikaga); `mart.mart_raie_kov` koondab näitajad omavalitsuse, aasta ja raieliigi kaupa
-4. **Testimine** — 11 andmekvaliteedi testi kontrollivad toorandmete korrektsust ja mart-tabeli olemasolu
+3. **Transformatsioon** — SQL-skriptid loovad `staging.v_metsateatis_kov` (kehtivad teatised koos KOV nimega katastritunnuse kaudu) ja `staging.v_metsateatis_kov_arhiiv` (arhiiv sama loogikaga); `mart.mart_raie_kov_kaart` koondab näitajad omavalitsuse, aasta ja raieliigi kaupa
+4. **Testimine** — 28 andmekvaliteedi testi kontrollivad toorandmete korrektsust ja mart-tabeli olemasolu
 5. **Näidikulaud** — Superset dashboard näitab raienäitajaid omavalitsuste ja aastate lõikes; Streamlit pakub alternatiivset vaadet
 
 ## Andmekvaliteedi testid
@@ -167,7 +167,7 @@ Testitud tabelid:
 
 Testitud tabelid:
 
-- `staging.raw_metsateatis` — 9 testi (sys_id, pindala, maht, otsus, geomeetria, duplikaadid)
+- `staging.raw_metsateatis` — 11 testi (sys_id, pindala, maht, otsus, geomeetria, duplikaadid, kehtivusaeg)
 - `staging.raw_metsateatis_arhiiv` — 3 testi (sys_id, pindala, duplikaadid)
 - `staging.raw_kataster` — 4 testi (tühjus, tunnus, unikaalsus, ov_nimi)
 - `staging.raw_kov_piirid` — 4 testi (arv, nimi, geomeetria)
@@ -183,7 +183,7 @@ Lävendid:
 | KOV liitmise kaotus (kehtivad) | < 5% | ≥ 5% |
 | KOV liitmise kaotus (arhiiv) | < 10% | ≥ 10% |
 | Tühi tabel | — | alati failed |
-Stop/go reegel:
+
 
 Stop/go reegel:
 
@@ -242,7 +242,7 @@ docker compose exec pipeline python scripts/run_pipeline.py test
 
 | Nimi | Roll |
 |------|------|
-| Anni-Brit | Andmeallika omanik — sissevõtu loogika, cron??, staging kihi disain |
+| Anni-Brit | Andmeallika omanik — sissevõtu loogika, orkestratsioon (CRON) |
 | Kati | Transformatsioonide omanik — staging ja mart mudelid, mõõdikute arvutamine |
 | Tiina | Kvaliteedi omanik — testid ja ebaõnnestunud kontrollide läbivaatus |
 | Maris | Näidikulaua omanik — dashboard ja seos äriküsimusega |
