@@ -230,7 +230,7 @@ docker compose exec pipeline python scripts/run_pipeline.py test
 ## Kokkuvõte, puudused ja võimalikud edasiarendused
 
 **Kokkuvõte:**
-- töötav andmetoru kolmest WFS-allikast: Metsaregister (kehtivad teatised + arhiiv ~845k kirjet), Maa-ameti kataster (~700k katastritüksust) ja haldusüksuste piirid
+- töötav andmetoru kolmest WFS-allikast: Metsaregister (kehtivad teatised ~145 000 + arhiiv ~845 000 kirjet), Maa- ja Ruumiameti kataster (~700 000 katastritüksust) ja haldusüksuste piirid
 - Staging kiht toorandmetega, transformatsioonikiht KOV-nime lisamisega katastritunnuse kaudu ning mart-tabel, mis ühendab kehtivad metsateatised ja arhiveeritud metsateatised, agregeeritud raienäitajatega
 - Kolm mõõdikut: teatiste arv, kogupindala (ha) ja kogumaht (m³) — omavalitsuse, aasta ja raieliigi lõikes
 Superset dashboard koropletkaardiga, mis visualiseerib raieaktiivsust KOV-ide kaupa koos GeoJSON piiripolügoonidega
@@ -240,8 +240,8 @@ Superset dashboard koropletkaardiga, mis visualiseerib raieaktiivsust KOV-ide ka
 **Puudused:**
 
 - Ligikaudu 7% arhiiviteatistest ei saa KOV-i nime juurde, sest nende katastritunnus on vahepeal muutunud
-- Superseti seadistus nõuab uuel kasutajal käsitsi andmebaasi ühenduse loomist; automatiseerimiskatsed jäid versioonide ühildumatuse tõttu poolikuks
-- Deck.gl koropletkaart ei rendereeri kõiki KOV-e usaldusväärselt kõigil kasutajatel
+- Deck.gl polygon ehk koropleetkaart ei kuva kõiki KOV-e
+- Väga paljudel metsateatistel (kehtivatel umbes 35 000-l) on raiemaht puudu, kuna see ei ole kohustuslik väli metsateatise esitamisel
 - Registriandmete puudused: kehtivate metsateatiste andmestikus on hulk mittekehtivaid metsateatisi, mis peaksid olema liikunud arhiivi, aga ei ole - need on meie mõõdikutest välja jäetud
   
 **Mis edasi:**
@@ -249,7 +249,7 @@ Superset dashboard koropletkaardiga, mis visualiseerib raieaktiivsust KOV-ide ka
 - Lisada ajalise trendi mart-tabel aastatevahelise muutuse näitamiseks
 - Muuta mart-tabel inkrementaalseks — ajaloolisi aastaid ei ehitataks iga päev nullist üles
 - Uurida Superseti alternatiivi (nt Streamlit koos Folium-iga), mis toetab paremini ruumilisi visualisatsioone
-- Lisada katastritunnuste historiseerimine, et vähendada arhiivis KOV-nimeta jäävate teatiste arvu
+- Et vähendada arhiivis KOV-nimeta jäävate teatiste arvu, kasutada KOV-nimeta jäänud metsateatistele KOV-i nime saamiseks spatial joini.  
   
 ## Meeskond
 
