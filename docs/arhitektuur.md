@@ -13,56 +13,64 @@ Kõik mõõdikud on kohaliku omavalitsuse (KOV) kaupa.
 3. **Raieala muutus (%) võrreldes eelmise aastaga** — jooksva ja eelmise aasta raieala vahe protsentides, kasutades nii kehtivaid kui arhiveeritud teatiseid.
 
 ## Andmeallikad
-
+ 
 | Allikas | Tüüp | Ajas muutuv? | Roll |
 |---------|------|--------------|------|
-| Metsaregistri WFS — kehtivad teatised (`metsaregister:teatis`) | API (WFS) | Jah, uueneb tööpäeviti | Põhiandmed: raieala, raiemaht, raieliik, geomeetria. ~144 000 kirjet. |
-| Metsaregistri WFS — teatiste arhiiv (`metsaregister:teatis_arhiiv`) | API (WFS) | Jah, lisandub igapäevaselt | Ajaloolised andmed alates 2016. ~845 000 kirjet. Vajalik aastase muutuse arvutamiseks. |
-| Maa-ameti KOV piirid (`ms:omavalitsus_pind`) | API (WFS) | Ei, uueneb harva | 78 KOV-i piiripolügooni kaardi ja ruumilise ristamise jaoks. |
-| `raieliik_koodid.csv` | seed / dim-tabel | Ei, staatiline | Raieliigi koodi ja nime vastendus. |
-
+| Metsaregistri WFS — kehtivad teatised (`metsaregister:teatis`) | API (WFS) | Jah, uueneb tööpäeviti | Põhiandmed: raieala, raiemaht, raieliik, katastritunnus, geomeetria. ~146 000 kehtivat teatist. Igapäevane päring, upsert `sys_id` järgi. |
+| Metsaregistri WFS — teatiste arhiiv (`metsaregister:teatis_arhiiv`) | API (WFS) | Jah, lisandub igapäevaselt | Ajaloolised andmed. ~840 000 kirjet. Ühekordne backfill + igapäevased inkrementaalsed lisandused (`arhiveerimise_aeg` järgi). Vajalik aastase trendi jaoks. |
+| Maa-ameti WFS — KOV piirid (`ehak:omavalitsuste_piirid`) | API (WFS) | Ei, uueneb harva | 78 KOV-i piiripolügooni kaardi joonistamiseks. Truncate + insert iga laadimisega. |
+| Maa-ameti WFS — katastriüksused (`kataster:ky_kehtiv`) | API (WFS) | Jah, uueneb regulaarselt | ~777 000 katastriüksuse tunnus → KOV nime ja maakonna vastendus. Kasutatakse teatise KOV-i tuvastamiseks. Truncate + insert, ilma geomeetriata. |
+| `raieliik_koodid.csv` (seed → `dim_raieliik`) | seed / dim-tabel | Ei, staatiline | Raieliigi koodi (`too_kood`) ja inimloetava nime vastendus. |
+| Maakonna ISO-koodid (seed → `dim_maakond_iso`) | seed / dim-tabel | Ei, staatiline | Maakonna nime ja ISO-koodi vastendus kaardi jaoks. |
+ 
+**KOV-i tuvastamine.** Teatis ei sisalda otse KOV-i nime. Selle asemel ühendatakse teatise `katastri_nr` katastritabeli `raw_kataster.tunnus` väljaga, mis annab `ov_nimi` (KOV) ja `mk_nimi` (maakond). KOV piiripolügoon (`raw_kov_piirid`) lisatakse seejärel KOV nime (`onimi`) järgi. Ruumilist ristamist ega EHAK-koodi parsimist ei kasutata.
+ 
 ## Andmevoog
-
+ 
 ```mermaid
 flowchart LR
-    seed[raieliik_koodid.csv] --> dim[(mart.dim_raieliik)]
-    WFS_A[Metsaregister WFS\nkehtivad teatised] --> ingest[Python ingest]
-    WFS_B[Metsaregister WFS\nteatiste arhiiv] --> ingest
-    MAA[Maa-ameti WFS\nKOV piirid] --> ingest
-    ingest --> raw_t[(staging.raw_metsateatis)]
-    ingest --> raw_a[(staging.raw_metsateatis_arhiiv)]
-    ingest --> raw_k[(staging.raw_kov_piirid)]
-    raw_t --> transform[dbt transformatsioon]
-    raw_a --> transform
-    raw_k --> transform
-    dim --> transform
-    transform --> kov[(mart.mart_raie_kov)]
-    transform --> ajaline[(mart.mart_raie_ajaline)]
-    kov --> dashboard[Dashboard]
-    ajaline --> dashboard
-    transform --> quality[Andmekvaliteedi testid]
-    AF[Airflow DAG] -.-> ingest
-    AF -.-> transform
+    SRC[WFS allikad\nteatised, arhiiv,\nkataster, KOV piirid\n+ CSV seed-id] --> PY[run_pipeline.py\nsissevõtt]
+    PY --> RAW[staging: toortabelid]
+    RAW --> VH[staging: vahekiht\nKOV + raieliik lisatud]
+    VH --> MART[mart_raie_kov_kaart\nmõõdikud KOV/aasta/raieliik\n+ GeoJSON polügoon]
+    MART --> SS[Apache Superset\nKPI-d + kaart]
+ 
+    CRON[cron scheduler\nigapäevane run-all] -.->|orkestreerib| PY
+    PY -.->|käivitab SQL + testid| MART
+    QA[andmekvaliteedi testid] -.-> MART
 ```
-
+ 
+Orkestratsioon: cron (`scheduler` konteiner, `start_cron.sh`), igapäevane `run-all`.
+Transformatsioonid: SQL-failid (`00_seed_dimensions.sql`, `01_transform.sql`), käivitab `run_pipeline.py`.
+Andmekvaliteet: `02_quality_tests.sql`, tulemused `quality.test_results` tabelisse.
+ 
 ## Andmebaasi kihid
-
-| Kiht | Roll |
-|------|------|
-| `staging` | Hoiab allikatest saadud andmeid töötlemata kujul: metsateatised, arhiiv, KOV piirid. |
-| `mart` | Hoiab puhastatud ja transformeeritud tabeleid: mõõdikud KOV-i kaupa, ajaline trend, raieliigi dimensioon. |
-| `quality` | Hoiab andmekvaliteedi testide tulemusi. |
-
+ 
+| Kiht | Tabel | Roll |
+|------|-------|------|
+| `staging` (toor) | `raw_metsateatis` | Kehtivad teatised WFS-ist, igapäevane upsert `sys_id` järgi. `_loaded_at` ajatempel. |
+| `staging` (toor) | `raw_metsateatis_arhiiv` | Arhiveeritud teatised, backfill + inkrementaalne lisandus. |
+| `staging` (toor) | `raw_kov_piirid` | 78 KOV-i piiripolügooni (Maa-ameti WFS), truncate + insert. |
+| `staging` (toor) | `raw_kataster` | ~777k katastriüksuse tunnus → KOV/maakond, ilma geomeetriata. |
+| `staging` (dim) | `dim_raieliik`, `dim_maakond_iso` | Seed-tabelid: raieliigi nimi ja maakonna ISO-kood. |
+| `staging` (vahekiht) | `v_metsateatis_kov` | Kehtivad teatised, millele on katastri kaudu lisatud KOV nimi + maakond ja raieliik dim-ist. |
+| `staging` (vahekiht) | `v_metsateatis_kov_arhiiv` | Sama loogika arhiivikirjetele. |
+| `mart` (äriloogika) | `mart_raie_kov_kaart` | Mõõdikud (teatiste arv, kogupindala, kogumaht) KOV/aasta/raieliik lõikes, ühendatud KOV-i GeoJSON-polügooniga (EPSG:4326, lihtsustatud) koropletkaardi jaoks. |
+| `quality` | `test_results` | Andmekvaliteedi testide tulemused (test, staatus, vigaste ridade arv, sõnum). |
+ 
 ## Tööjaotus
-
+ 
 | Roll | Vastutus | Täitja |
 |------|----------|--------|
-| Andmeallika omanik | Kirjutab sissevõtu loogika, hoiab Airflow DAG-i töökorras, disainib staging kihi | Anni-Brit |
-| Transformatsioonide omanik | Kirjutab dbt staging ja mart mudelid, arvutab mõõdikud | Kati |
-| Kvaliteedi omanik | Kirjutab dbt testid ja vaatab läbi ebaõnnestunud kontrollid | Tiina |
-| Näidikulaua omanik | Ehitab näidikulaua ja seob selle äriküsimusega | Maris |
+| Andmeallika omanik / orkestratsioon | Sissevõtuloogika (`run_pipeline.py`), cron-scheduler, Docker Compose, staging skeem, logimine ja korduskatsed | Anni-Brit |
+| Transformatsioonide omanik | SQL transformatsioonid (`00_seed_dimensions.sql`, `01_transform.sql`), vahekiht ja mart, mõõdikute arvutus | Kati |
+| Kvaliteedi omanik | Andmekvaliteedi testid (`02_quality_tests.sql`) | Tiina |
+| Näidikulaua omanik | Apache Superset KPI-paneelid ja koropleetkaart | Maris |
+
 
 ## Riskid
+
+(1. sprindi seisuga)
 
 | Risk | Mõju | Maandus |
 |------|------|---------|
