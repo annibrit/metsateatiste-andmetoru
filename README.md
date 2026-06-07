@@ -230,19 +230,20 @@ docker compose exec pipeline python scripts/run_pipeline.py test
 ## Kokkuvõte, puudused ja võimalikud edasiarendused
 
 **Kokkuvõte:**
-- töötav andmetoru kolmest WFS-allikast: Metsaregister (kehtivad teatised ~145 000 + arhiiv ~845 000 kirjet), Maa- ja Ruumiameti kataster (~700 000 katastritüksust) ja haldusüksuste piirid
-- Staging kiht toorandmetega, transformatsioonikiht KOV-nime lisamisega katastritunnuse kaudu ning mart-tabel, mis ühendab kehtivad metsateatised ja arhiveeritud metsateatised, agregeeritud raienäitajatega
-- Kolm mõõdikut: teatiste arv, kogupindala (ha) ja kogumaht (m³) — omavalitsuse, aasta ja raieliigi lõikes
-Superset dashboard koropletkaardiga, mis visualiseerib raieaktiivsust KOV-ide kaupa koos GeoJSON piiripolügoonidega
-- 28 andmekvaliteedi testi staging-kihi korrektsuse kontrollimiseks
-- Igapäevane automatiseeritud andmevoog cron-i kaudu
+- töötav andmetoru kolmest WFS-allikast: Metsaregister (kehtivad teatised ~145 000 + arhiiv ~845 000 kirjet), Maa- ja Ruumiameti kataster (~700 000 katastritüksust) ja haldusüksuste piirid.
+- Staging kiht toorandmetega, transformatsioonikiht KOV-nime lisamisega katastritunnuse kaudu ning mart-tabel, mis ühendab kehtivad metsateatised ja arhiveeritud metsateatised, agregeeritud raienäitajatega.
+- Kolm mõõdikut: teatiste arv, kogupindala (ha) ja kogumaht (m³) — omavalitsuse, aasta ja raieliigi lõikes.
+- Superset dashboard koropletkaardiga, mis visualiseerib raieaktiivsust maakondade lõikes.
+- 28 andmekvaliteedi testi staging-kihi korrektsuse kontrollimiseks.
+- Igapäevane automatiseeritud andmevoog cron-i kaudu.
+- Dashboardi jaoks alguses katsetasime Streamliti (kood on leitav dashboard -> app.py), aga see oli väga aeglane ja lõpuks jäime Superseti juurde. 
 
 **Puudused:**
 
-- Ligikaudu 7% arhiiviteatistest ei saa KOV-i nime juurde, sest nende katastritunnus on vahepeal muutunud
-- Deck.gl polygon ehk koropleetkaart ei kuva kõiki KOV-e
-- Väga paljudel metsateatistel (kehtivatel umbes 35 000-l) on raiemaht puudu, kuna see ei ole kohustuslik väli metsateatise esitamisel
-- Registriandmete puudused: kehtivate metsateatiste andmestikus on hulk mittekehtivaid metsateatisi, mis peaksid olema liikunud arhiivi, aga ei ole - need on meie mõõdikutest välja jäetud
+- Ligikaudu 7% arhiiviteatistest ei saa KOV-i nime juurde, sest nende katastritunnus on vahepeal muutunud.
+- Deck.gl polygon ehk koropleetkaart ei kuva kõiki KOV-e. Seega jäi meil dashboardi lõppversioonist välja KOV-idega kaart ehk tegelikult me praegu ei kasuta WFS-i kaudu tõmmatud KOV-ide piire, kuigi need on küll ka liidetud meie mart tabelile ja koordinaadid viidud Superseti deck.gl polygoni jaoks sobivasse formaati.
+- Väga paljudel metsateatistel (kehtivatel umbes 35 000-l) on raiemaht puudu, kuna see ei ole meie teada kohustuslik väli metsateatise esitamisel. Samas arhiivis olevatel metsateatistel on väga vähestel raiemaht puudu. Me pole selgusele saanud, miks see nii on.
+- Registriandmete puudused: kehtivate metsateatiste andmestikus on hulk mittekehtivaid metsateatisi, mis peaksid olema liikunud arhiivi, aga ei ole - need on meie mõõdikutest välja jäetud.
   
 **Mis edasi:**
 
