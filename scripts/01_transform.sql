@@ -2,6 +2,10 @@
 -- Loob staging.v_metsateatis_kov ja staging.v_metsateatis_kov_arhiiv
 -- katastritunnuse kaudu KOV nime lisamisega ning mart tabeli mõõdikutega.
 
+-- ============================================================
+-- staging.v_metsateatis_kov (kehtivad teatised)
+-- ============================================================
+
 DROP TABLE IF EXISTS staging.v_metsateatis_kov;
 
 CREATE TABLE staging.v_metsateatis_kov AS
@@ -31,13 +35,7 @@ LEFT JOIN staging.dim_raieliik AS d
 
 
 -- ============================================================
--- staging.v_metsateatis_kov_arhiiv
--- Arhiivitud teatised koos KOV nimega (katastritunnuse kaudu).
--- Ruumilise joini asemel kasutatakse katastri viidetabelit,
--- sest 845k kirje peale oleks spatial join liiga aeglane.
--- Katastritunnused aga muutuvad ajas seega kaotame ca 7%
--- arhiivi teatistest, sest neile ei saa KOVi nime juurde
--- (ilmselt varem eksisteerinud katastrinumbrit täna enam ei eksisteeri)
+-- staging.v_metsateatis_kov_arhiiv (arhiveeritud teatised)
 -- ============================================================
 
 DROP TABLE IF EXISTS staging.v_metsateatis_kov_arhiiv;
@@ -69,30 +67,40 @@ LEFT JOIN staging.dim_raieliik AS d
 -- dropime need tabelid, kui kellelgi on veel jäänud eelmistest runidest
 
 DROP TABLE IF EXISTS mart.mart_raie_kov;
-
 DROP TABLE IF EXISTS staging.kov_piirid_parandatud;
-
 DROP TABLE IF EXISTS mart.mart_teatised_kaardile;
+
 -- ============================================================
 -- mart.mart_raie_kov_kaart
 -- Raienäitajad (kehtivad teatised + arhiiv) KOV-i kaupa
 -- koos piiripolügooniga — koropletkaardi jaoks.
--- Sammud: 1) agregeeri tekstandmed (GROUP BY ilma geomeetriata)
---          2) join KOV piiridega geomeetria lisamiseks (ainult 78 rida)
+-- Sammud: 1) join KOV piiridega geomeetria lisamiseks (ainult 78 rida)
+--         2) agregeeri tekstandmed (GROUP BY ilma geomeetriata)
+-- Lisab maakonna iso koodi.
 -- ============================================================
 
 DROP TABLE IF EXISTS mart.mart_raie_kov_kaart;
 
+-- Geomeetria arvutatakse üks kord 78 KOV-i jaoks, mitte iga (kov+aasta+raieliik) kohta eraldi.
 CREATE TABLE mart.mart_raie_kov_kaart AS
+WITH kov_geojson AS (
+    SELECT
+        onimi,
+        mnimi,
+        ST_AsGeoJSON(ST_Simplify(ST_Transform(geom, 4326), 0.001)) AS geojson
+    FROM staging.raw_kov_piirid
+    WHERE geom IS NOT NULL
+)
 SELECT
     agg.maakond,
+    iso.iso_kood   AS maakond_iso,
     agg.kov_nimi,
     agg.aasta,
     agg.raieliik,
     agg.teatiste_arv,
     agg.kogupindala_ha,
     agg.kogumaht_m3,
-    ST_AsGeoJSON(ST_Simplify(ST_Transform(k.geom, 4326), 0.001)) AS geojson
+    kg.geojson
 FROM (
     SELECT
         maakond,
@@ -113,6 +121,8 @@ FROM (
     ) AS c
     GROUP BY maakond, kov_nimi, aasta, raieliik
 ) AS agg
-LEFT JOIN staging.raw_kov_piirid AS k
-    ON agg.kov_nimi = k.onimi
-WHERE k.geom IS NOT NULL;
+LEFT JOIN kov_geojson AS kg
+    ON agg.kov_nimi = kg.onimi
+LEFT JOIN staging.dim_maakond_iso AS iso
+    ON agg.maakond = iso.maakond
+WHERE kg.geojson IS NOT NULL;
