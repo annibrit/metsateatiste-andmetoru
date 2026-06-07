@@ -115,6 +115,7 @@ FROM (
         FROM staging.v_metsateatis_kov
         WHERE kov_nimi IS NOT NULL AND aasta >= 2018 
             AND kehtiv_kuni >= now() -- ainult tegelikult kehtivad; aegunud tulevad arhiivist
+            AND otsus = 'JAH'
         UNION ALL
         SELECT sys_id, kov_nimi, maakond, aasta, raieliik, pindala, raiutav_maht
         FROM staging.v_metsateatis_kov_arhiiv
