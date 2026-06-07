@@ -660,13 +660,13 @@ def check_results() -> None:
             return f"{value:>10,} rida" if value is not None else "    pole veel loodud"
 
         v_kov = safe_count("staging.v_metsateatis_kov")
-        mart_kov = safe_count("mart.mart_raie_kov")
+        mart_kov = safe_count("mart.mart_raie_kov_kaart")
 
         print()
         print("Transformeeritud tabelite seis")
         print("------------------------------")
         print(f"  v_metsateatis_kov:       {fmt(v_kov)}")
-        print(f"  mart_raie_kov:           {fmt(mart_kov)}")
+        print(f"  mart_raie_kov_kaart:     {fmt(mart_kov)}")
         if mart_kov in (None, 0):
             print("  NB: mart on tühi — kontrolli, kas transform käivitus (run_pipeline.py transform).")
 
