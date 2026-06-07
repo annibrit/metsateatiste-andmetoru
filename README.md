@@ -162,22 +162,38 @@ Kõik saladused on `.env` failis. Repos on ainult `.env.example`. Päris `.env` 
 5. **Näidikulaud** — Superset dashboard näitab raienäitajaid omavalitsuste ja aastate lõikes; Streamlit pakub alternatiivset vaadet
 
 ## Andmekvaliteedi testid
+Projekt kontrollib 26 testi abil kõiki staging ja mart tabeleid (scripts/02_quality_tests.sql).
+Testitud tabelid:
 
-Projekt kontrollib järgmist (`scripts/02_quality_tests.sql`):
+Testitud tabelid:
 
-1. `sys_id` ei tohi olla NULL
-2. Pindala peab olema positiivne
-3. Raiutav maht ei tohi olla negatiivne
-4. Otsus peab olema `JAH` või `EI`
-5. `too_kood` (raieliigi kood) ei tohi olla NULL
-6. `otsus_kinnitatud_kp` (otsuse kuupäev) ei tohi olla NULL
-7. Geomeetria ei tohi olla NULL
-8. Geomeetria peab olema kehtiv (`ST_IsValid`)
-9. KOV piirid on laaditud (vähemalt 70 omavalitsust)
-10. Mart tabel ei ole tühi
-11. Arhiivi `sys_id` väärtused on unikaalsed
+- `staging.raw_metsateatis` — 9 testi (sys_id, pindala, maht, otsus, geomeetria, duplikaadid)
+- `staging.raw_metsateatis_arhiiv` — 3 testi (sys_id, pindala, duplikaadid)
+- `staging.raw_kataster` — 4 testi (tühjus, tunnus, unikaalsus, ov_nimi)
+- `staging.raw_kov_piirid` — 4 testi (arv, nimi, geomeetria)
+- `mart.mart_raie_kov_kaart` — 4 testi (tühjus, pindala, teatiste arv, geojson)
+- KOV liitmise kaotus — 2 testi (kehtivad ja arhiiv)
 
-Testide tulemused salvestatakse `quality.test_results` tabelisse. Vaatamiseks:
+Lävendid:
+| Probleem | Warning | Failed |
+|----------|---------|--------|
+| Vigane geomeetria | < 1% | ≥ 1% |
+| NULL väärtused | < 5% | ≥ 5% |
+| Duplikaadid | < 0.1% | ≥ 0.1% |
+| KOV liitmise kaotus (kehtivad) | < 5% | ≥ 5% |
+| KOV liitmise kaotus (arhiiv) | < 10% | ≥ 10% |
+| Tühi tabel | — | alati failed |
+Stop/go reegel:
+
+Stop/go reegel:
+
+- `failed` — pipeline peatub, andmed ei jätka töötlemist
+- `warning` — pipeline jätkab, probleem logitakse
+- `passed` — kõik korras
+
+**Duplikaatide automaatne puhastus:** duplikaadid logitakse `quality.duplicate_log` tabelisse ja kustutatakse automaatselt enne testide käivitamist.
+
+Testide tulemused salvestatakse `quality.test_results` tabelisse ja on nähtavad Superseti dashboardil.
 
 ```bash
 docker compose exec pipeline python scripts/run_pipeline.py test
