@@ -125,6 +125,9 @@ CREATE INDEX IF NOT EXISTS idx_raw_metsateatis_arhiiv_geom
 CREATE INDEX IF NOT EXISTS idx_raw_kov_piirid_geom
     ON staging.raw_kov_piirid USING gist (geom);
 
+CREATE INDEX IF NOT EXISTS idx_raw_metsateatis_katastri_nr
+    ON staging.raw_metsateatis (katastri_nr);
+
 -- Abistab arhiivi backfilli jätkamist ja igapäevaseid lisandusi
 CREATE INDEX IF NOT EXISTS idx_raw_metsateatis_arhiiv_aeg
     ON staging.raw_metsateatis_arhiiv (arhiveerimise_aeg);
