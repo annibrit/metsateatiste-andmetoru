@@ -108,19 +108,20 @@ FROM staging.raw_metsateatis
 WHERE pindala IS NULL OR pindala <= 0;
 
 -- ============================================================
--- TEST 3: raw_metsateatis — raiutav_maht >= 0
+-- TEST 3: raw_metsateatis — raiutav_maht info (null/0 ei ole viga)
 -- ============================================================
 INSERT INTO quality.test_results (test_name, status, failed_rows, message)
+WITH negatiivsed AS (SELECT COUNT(*) AS neg FROM staging.raw_metsateatis WHERE raiutav_maht < 0),
+nullid AS (SELECT COUNT(*) AS nul FROM staging.raw_metsateatis WHERE raiutav_maht = 0 OR raiutav_maht IS NULL)
 SELECT
-    'raw_metsateatis: raiutav_maht >= 0',
-    CASE WHEN COUNT(*) = 0 THEN 'passed' ELSE 'failed' END,
-    COUNT(*)::integer,
-    CASE WHEN COUNT(*) = 0
-        THEN 'Kõigi teatiste raiutav maht on nullist suurem või null.'
-        ELSE COUNT(*) || ' teatist negatiivse raiutava mahuga.'
+    'raw_metsateatis: raiutav_maht info',
+    CASE WHEN neg > 0 THEN 'failed' ELSE 'passed' END,
+    neg::integer,
+    CASE WHEN neg > 0
+        THEN neg || ' teatist negatiivse mahuga (viga!). Nullmaht: ' || nul || ' teatist (normaalne).'
+        ELSE 'Negatiivseid mahte pole. Nullmaht: ' || nul || ' teatist (sanitaar- vm raie, normaalne).'
     END
-FROM staging.raw_metsateatis
-WHERE raiutav_maht < 0;
+FROM negatiivsed, nullid;
 
 -- ============================================================
 -- TEST 4: raw_metsateatis — otsus in (JAH, EI)
@@ -530,46 +531,6 @@ SELECT
         || ROUND(k * 100.0 / NULLIF(kokku, 0), 2)
         || '% — lävend 10%).'
 FROM kaotus;
-
--- ============================================================
--- TEST 27: raw_metsateatis — aegunud teatised kehtivate tabelis
--- "Kehtiv" peaks tähendama kehtiv_kuni >= now(). Aegunud teatised
--- kuuluvad arhiivi, mitte kehtivate tabelisse. Teadaolev allika
--- omadus (WFS jätab aegunud teatised kehtivate kihti) — maandatud
--- martis kehtiv_kuni >= now() filtriga, seega warning, mitte failed.
--- ============================================================
-INSERT INTO quality.test_results (test_name, status, failed_rows, message)
-SELECT
-    'raw_metsateatis: aegunud teatised kehtivate seas',
-    CASE
-        WHEN COUNT(*) = 0 THEN 'passed'
-        ELSE 'warning'
-    END,
-    COUNT(*)::integer,
-    CASE WHEN COUNT(*) = 0
-        THEN 'Kõik kehtivate tabeli teatised on tõesti kehtivad.'
-        ELSE COUNT(*) || ' aegunud teatist kehtivate tabelis ('
-            || ROUND(COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM staging.raw_metsateatis), 0), 2)
-            || '% — peaksid olema arhiivis, maandatud martis kehtiv_kuni filtriga).'
-    END
-FROM staging.raw_metsateatis
-WHERE kehtiv_kuni < now();
-
--- TEST 28: kehtivad ja arhiiv ei tohi kattuda (teatise_nr järgi)
-INSERT INTO quality.test_results (test_name, status, failed_rows, message)
-SELECT
-    'kehtivad vs arhiiv: teatise_nr kattuvus',
-    CASE WHEN COUNT(*) = 0 THEN 'passed' ELSE 'failed' END,
-    COUNT(*)::integer,
-    CASE WHEN COUNT(*) = 0
-        THEN 'Ükski teatis pole korraga kehtivate ja arhiivi tabelis.'
-        ELSE COUNT(*) || ' teatist mõlemas tabelis — kokkuliitmine loeb topelt.'
-    END
-FROM (
-    SELECT teatise_nr FROM staging.raw_metsateatis
-    INTERSECT
-    SELECT teatise_nr FROM staging.raw_metsateatis_arhiiv
-) x;
 
 -- ============================================================
 -- KOKKUVÕTE

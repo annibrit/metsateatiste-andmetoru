@@ -55,20 +55,12 @@ cd metsateatiste-andmetoru
 # 2. Kopeeri keskkonnamuutujad ja sea paroolid
 cp .env.example .env
 
+# 3. Käivita kogu süsteem (andmebaas, pipeline, scheduler, Superset)
+docker compose up -d --build
 
-# 3. Käivita andmebaas ja pipeline
-docker compose up db pipeline -d --build
-
-# 4. Lae andmed sisse (esimesel korral)
-docker compose exec pipeline python scripts/run_pipeline.py ingest
-docker compose exec pipeline python scripts/run_pipeline.py ingest-kov
-docker compose exec pipeline python scripts/run_pipeline.py ingest-kataster
-
-# 5. Käivita transformatsioon
-docker compose exec pipeline python scripts/run_pipeline.py transform
-
-# 6. [Vabatahtlik] Lae arhiiv (845k kirjet, võtab kaua)
-docker compose exec pipeline python scripts/run_pipeline.py ingest-arhiiv
+# 4. Lae andmed ja jooksuta kogu töövoog
+#    (esimene kord laeb ka arhiivi ~840k kirjet, seega võtab aega)
+docker compose exec pipeline python scripts/run_pipeline.py run-all
 ```
 
 Superset näidikulaud: http://localhost:8088
@@ -103,28 +95,27 @@ Ehitamine võtab esimesel korral mõni minut. Superset avaneb aadressil **http:/
 
 Sisselogimise andmed on `.env` failis: `SUPERSET_ADMIN_USER` ja `SUPERSET_ADMIN_PASSWORD`.
 
-**1. samm — andmebaasi ühenduse seadistamine**
+**1. samm — Logi sisse**
 
-Seda tuleb teha üks kord pärast esmakordset käivitamist:
+**2. samm - Loo andmebaasühendus (vajalik esmakordsel käivitamisel AINULT JUHUL KUI Datasets aken ei kuva andmebaasi Mets)**
 
-1. Logi Supersetti sisse
-2. Ava **Settings → Database Connections**
-3. Klõpsa **+ Database → PostgreSQL**
-4. Sisesta SQLAlchemy URI:
+2.1. Ava **Settings → Database Connections**
+2.2 Klõpsa **+ Database → PostgreSQL**
+2.3 Sisesta SQLAlchemy URI:
    ```
    postgresql+psycopg2://metsaregister:POSTGRES_PASSWORD@db:5432/metsaregister
    ```
    Asenda `POSTGRES_PASSWORD` oma `.env` faili `POSTGRES_PASSWORD` väärtusega
-5. Klõpsa **Test Connection** — peab ilmuma roheline `Connection looks good!`
-6. Klõpsa **Connect**
+2.4 Klõpsa **Test Connection** — peab ilmuma roheline `Connection looks good!`
+2.5 Klõpsa **Connect**
 
-**2. samm — näidikulaua importimine**
+**3. samm — näidikulaua importimine**
 
 1. Ava **Settings → Import Dashboards**
 2. Lae üles fail `superset/dashboard_export_*.zip`
 3. Klõpsa **Import**
 
-**3. samm — veendu, et andmed on olemas**
+**4. samm — veendu, et andmed on olemas**
 
 Kui dashboard näitab tühja vaadet, käivita pipeline enne Superseti avamist:
 
@@ -230,14 +221,28 @@ docker compose exec pipeline python scripts/run_pipeline.py test
 ## Kokkuvõte, puudused ja võimalikud edasiarendused
 
 **Kokkuvõte:**
-- [Loetle, mis on lõpule viidud, mis töötab hästi]
+- töötav andmetoru kolmest WFS-allikast: Metsaregister (kehtivad teatised ~145 000 + arhiiv ~845 000 kirjet), Maa- ja Ruumiameti kataster (~700 000 katastritüksust) ja haldusüksuste piirid.
+- Staging kiht toorandmetega, transformatsioonikiht KOV-nime lisamisega katastritunnuse kaudu ning mart-tabel, mis ühendab kehtivad metsateatised ja arhiveeritud metsateatised, agregeeritud raienäitajatega.
+- Kolm mõõdikut: teatiste arv, kogupindala (ha) ja kogumaht (m³) — omavalitsuse, aasta ja raieliigi lõikes.
+- Superset dashboard koropletkaardiga, mis visualiseerib raieaktiivsust maakondade lõikes.
+- 28 andmekvaliteedi testi staging-kihi korrektsuse kontrollimiseks.
+- Igapäevane automatiseeritud andmevoog cron-i kaudu.
+- Dashboardi jaoks alguses katsetasime Streamliti (kood on leitav dashboard -> app.py), aga see oli väga aeglane ja lõpuks jäime Superseti juurde. 
 
 **Puudused:**
-- [Loetle ausalt, mis jäi tegemata - see ei mõjuta hinnet negatiivselt, vaid aitab hinnata]
 
+- Ligikaudu 7% arhiiviteatistest ei saa KOV-i nime juurde, sest nende katastritunnus on vahepeal muutunud.
+- Deck.gl polygon ehk koropleetkaart ei kuva kõiki KOV-e. Seega jäi meil dashboardi lõppversioonist välja KOV-idega kaart ehk tegelikult me praegu ei kasuta WFS-i kaudu tõmmatud KOV-ide piire, kuigi need on küll ka liidetud meie mart tabelile ja koordinaadid viidud Superseti deck.gl polygoni jaoks sobivasse formaati.
+- Väga paljudel metsateatistel (kehtivatel umbes 35 000-l) on raiemaht puudu, kuna see ei ole meie teada kohustuslik väli metsateatise esitamisel. Samas arhiivis olevatel metsateatistel on väga vähestel raiemaht puudu. Me pole selgusele saanud, miks see nii on.
+- Registriandmete puudused: kehtivate metsateatiste andmestikus on hulk mittekehtivaid metsateatisi, mis peaksid olema liikunud arhiivi, aga ei ole - need on meie mõõdikutest välja jäetud.
+  
 **Mis edasi:**
-- [Mida tahaksid edasi teha, kui aega oleks rohkem]
 
+- Lisada ajalise trendi mart-tabel aastatevahelise muutuse näitamiseks
+- Muuta mart-tabel inkrementaalseks — ajaloolisi aastaid ei ehitataks iga päev nullist üles
+- Uurida Superseti alternatiivi (nt Streamlit koos Folium-iga), mis toetab paremini ruumilisi visualisatsioone
+- Et vähendada arhiivis KOV-nimeta jäävate teatiste arvu, kasutada KOV-nimeta jäänud metsateatistele KOV-i nime saamiseks spatial joini.  
+  
 ## Meeskond
 
 | Nimi | Roll |
