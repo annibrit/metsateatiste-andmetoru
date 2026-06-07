@@ -2,7 +2,9 @@
 
 ## Äriküsimus
 
-Projekt kogub ja analüüsib Eesti metsaregistri raieteatisi, et võimaldada omavalitsuste, aastate ja raieliikide lõikes metsanduslike mõõdikute jälgimist. Projektis on liidetud nii kehtivad metsateatised ehk viimase 2 aasta teatised kui ka arhiveeritud metsateatised alates aastast 2018. Lahendus on kasulik metsanduspoliitika kujundajatele, uurijatele ja omavalitsustele, kes soovivad ülevaadet oma piirkonna raieaktiivsusest.
+*Kuidas on metsaraie metsateatiste alusel Eestis aastate jooksul muutunud — kus, kui palju ja mis tüüpi raie kasvab või kahaneb?*
+
+Projekt kogub ja analüüsib Eesti metsaregistri raieteatisi, et võimaldada omavalitsuste, aastate ja raieliikide lõikes metsanduslike mõõdikute jälgimist. Projektis on liidetud nii kehtivad metsateatised ehk viimase 2 aasta teatised kui ka arhiveeritud metsateatised alates aastast 2018.
 
 **Mõõdikud:**
 
@@ -32,7 +34,7 @@ Täpsem kirjeldus: [`docs/arhitektuur.md`](docs/arhitektuur.md)
 | Metsaregister WFS (`metsaregister:teatis`) | WFS API | Jah, igapäevane täislaadimine | Kehtivad raieteatised |
 | Metsaregister WFS (`metsaregister:teatis_arhiiv`) | WFS API | Jah, inkrementaalne laadimine | Ajaloolised raieteatised |
 | Maa- ja Ruumiamet kataster WFS (`kataster:ky_kehtiv`) | WFS API | Harva muutuv, täislaadimine | KOV nime lisamine katastritunnuse kaudu |
-| Maa- ja Ruumiamet haldusüksused WFS (`ehak:omavalitsuste_piirid`) | WFS API | Harva muutuv | KOV piiripolügoonid kaardikihi jaoks |
+| Maa- ja Ruumiamet haldusüksused WFS (`ehak:omavalitsuste_piirid`) | WFS API | Harva muutuv, täislaadimine | KOV piiripolügoonid kaardikihi jaoks |
 | `scripts/raieliik_koodid.csv` | Seed-fail | Staatiline | Raieliigi koodide tõlketabel |
 
 ## Stack
@@ -99,15 +101,15 @@ Sisselogimise andmed on `.env` failis: `SUPERSET_ADMIN_USER` ja `SUPERSET_ADMIN_
 
 **2. samm - Loo andmebaasühendus (vajalik esmakordsel käivitamisel AINULT JUHUL KUI Datasets aken ei kuva andmebaasi Mets)**
 
-2.1. Ava **Settings → Database Connections**
-2.2 Klõpsa **+ Database → PostgreSQL**
-2.3 Sisesta SQLAlchemy URI:
+1. Ava **Settings → Database Connections**
+2. Klõpsa **+ Database → PostgreSQL**
+3. Sisesta SQLAlchemy URI:
    ```
    postgresql+psycopg2://metsaregister:POSTGRES_PASSWORD@db:5432/metsaregister
    ```
    Asenda `POSTGRES_PASSWORD` oma `.env` faili `POSTGRES_PASSWORD` väärtusega
-2.4 Klõpsa **Test Connection** — peab ilmuma roheline `Connection looks good!`
-2.5 Klõpsa **Connect**
+4. Klõpsa **Test Connection** — peab ilmuma roheline `Connection looks good!`
+5. Klõpsa **Connect**
 
 **3. samm — näidikulaua importimine**
 
@@ -153,7 +155,7 @@ Kõik saladused on `.env` failis. Repos on ainult `.env.example`. Päris `.env` 
 5. **Näidikulaud** — Superset dashboard näitab raienäitajaid omavalitsuste ja aastate lõikes; Streamlit pakub alternatiivset vaadet
 
 ## Andmekvaliteedi testid
-Projekt kontrollib 26 testi abil kõiki staging ja mart tabeleid (scripts/02_quality_tests.sql).
+Projekt kontrollib 28 testi abil kõiki staging ja mart tabeleid (scripts/02_quality_tests.sql).
 Testitud tabelid:
 
 Testitud tabelid:
@@ -221,7 +223,7 @@ docker compose exec pipeline python scripts/run_pipeline.py test
 ## Kokkuvõte, puudused ja võimalikud edasiarendused
 
 **Kokkuvõte:**
-- töötav andmetoru kolmest WFS-allikast: Metsaregister (kehtivad teatised ~145 000 + arhiiv ~845 000 kirjet), Maa- ja Ruumiameti kataster (~700 000 katastritüksust) ja haldusüksuste piirid.
+- Töötav andmetoru kolmest WFS-allikast: Metsaregister (kehtivad teatised ~145 000 + arhiiv ~845 000 kirjet), Maa- ja Ruumiameti kataster (~700 000 katastritüksust) ja haldusüksuste piirid.
 - Staging kiht toorandmetega, transformatsioonikiht KOV-nime lisamisega katastritunnuse kaudu ning mart-tabel, mis ühendab kehtivad metsateatised ja arhiveeritud metsateatised, agregeeritud raienäitajatega.
 - Kolm mõõdikut: teatiste arv, kogupindala (ha) ja kogumaht (m³) — omavalitsuse, aasta ja raieliigi lõikes.
 - Superset dashboard koropletkaardiga, mis visualiseerib raieaktiivsust maakondade lõikes.
@@ -240,14 +242,14 @@ docker compose exec pipeline python scripts/run_pipeline.py test
 
 - Lisada ajalise trendi mart-tabel aastatevahelise muutuse näitamiseks
 - Muuta mart-tabel inkrementaalseks — ajaloolisi aastaid ei ehitataks iga päev nullist üles
-- Uurida Superseti alternatiivi (nt Streamlit koos Folium-iga), mis toetab paremini ruumilisi visualisatsioone
-- Et vähendada arhiivis KOV-nimeta jäävate teatiste arvu, kasutada KOV-nimeta jäänud metsateatistele KOV-i nime saamiseks spatial joini.  
+- Uurida lähemalt Superseti alternatiivi (nt Streamlit koos Folium-iga), mis toetab paremini ruumilisi visualisatsioone
+- Et vähendada arhiivis KOV nimeta jäävate teatiste arvu, kasutada ainult KOV nimeta jäänud metsateatistele KOV-i nime saamiseks spatial joini.  
   
 ## Meeskond
 
 | Nimi | Roll |
 |------|------|
-| Anni-Brit | Andmeallika omanik — sissevõtu loogika, orkestratsioon (CRON) |
+| Anni-Brit | Andmeallika omanik — sissevõtu loogika, orkestratsioon |
 | Kati | Transformatsioonide omanik — staging ja mart mudelid, mõõdikute arvutamine |
 | Tiina | Kvaliteedi omanik — testid ja ebaõnnestunud kontrollide läbivaatus |
 | Maris | Näidikulaua omanik — dashboard ja seos äriküsimusega |
